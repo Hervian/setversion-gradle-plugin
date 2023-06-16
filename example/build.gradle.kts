@@ -1,8 +1,8 @@
 plugins {
     java
-    id("com.ncorti.kotlin.gradle.template.plugin")
+    id("com.github.hervian.gradle.serversion.plugin")
 }
 
-templateExampleConfig {
+setApiVersionExtension {
     message.set("Just trying this gradle plugin...")
 }
