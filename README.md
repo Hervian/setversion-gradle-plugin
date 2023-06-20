@@ -1,18 +1,41 @@
 # kotlin-gradle-plugin-template 🐘
 
-A Gradle plugin to upgrade the gradle version based based on diffs between your projects current openapi.json spec and
-whatever is in test/QA/prod etc. That is: The plugin takes the old openapi.json and the new openapi.json as input.
+A Gradle plugin to upgrade the gradle version based on diffs between your project's current openapi.json spec and
+whatever is in test/QA/prod etc.
+
+That is: The plugin takes the old openapi.json and the new openapi.json as input.
 Intended usage is to add a call the setApiVersion task in your pipeline such as to get automatic versioning for
 your openapi documented REST app.
+
+Be aware that this plugin assumes that you produce your openapi document in a way where the version number is copied
+from the gradle project's version. That is, the setApiVersion task updates the version number defined in the
+gradle.proerties file.
+
+Available tasks:
+* nextApiVersion: outputs the inferred next api version
+* setApiVersion: like nextApiVersion but with the added feature that the version number in the gradle.properties is updated.
 
 ## How to use 👣
 
 `gradlew setApiVersion`
 Be aware that the task needs 2 files: the "old" api and the new api.
 
+How to get the "old" api depends on your setup. If your build produces a binary that incldues the openapi doc you can
+probably download the binary using maven or gradle commands and get the doc from the artifact.
+If your openapi doc is only available runtime you can make a curl GET request to download the document.
+The same kind of goes for the new api:
 If you are using springdoc that works by runtime scanning you must add a plugin like the openapi-gradle-plugin
 which build time starts up a server and then downloads the openapi doc such as to make it available for downstream
 tooling like present plugin.
+
+Please be aware that the plugin's task `setApiversion` updates the version number assumed to be in the
+gradle.properties file. I.e. that goal will only work if the version number is defined in the gradle.properties file
+and not in the build.gradle.kts file. Also, since the version number gets updates you could consider git commiting and
+pushing the changed source code. Alternatively your build script just produces a binary/docker image from the modified
+code and don't care about the version number change being added to source version control. This is no problem for the
+functioning of this plugin as it focuses on the version numbers in the openapi docs.
+
+`nextApiVersion` task: See this Q&A for how to access the returned version number: https://stackoverflow.com/questions/59024354/custom-gradle-plugin-access-return-value-from-method
 
 ## Features 🎨
 

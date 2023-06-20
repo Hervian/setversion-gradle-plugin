@@ -25,7 +25,7 @@ gradleEnterprise {
     }
 }
 
-rootProject.name = "kotlin-gradle-plugin-template"
+rootProject.name = "rip-version-gradle-plugin"
 
 include(":example")
 includeBuild("plugin-build")

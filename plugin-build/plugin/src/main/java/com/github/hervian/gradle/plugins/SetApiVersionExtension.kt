@@ -31,7 +31,7 @@ abstract class SetApiVersionExtension @Inject constructor(project: Project) {
     )
 
     @Optional
-    val versionSuffix: Property<String> = objects.property(String::class.java).convention(
+    var versionSuffix: Property<String> = objects.property(String::class.java).convention(
         "+" + DateTimeFormatter.ofPattern("yyyyMMdd.HHmmss").withZone(ZoneId.systemDefault()).format(Instant.now()),
     )
 

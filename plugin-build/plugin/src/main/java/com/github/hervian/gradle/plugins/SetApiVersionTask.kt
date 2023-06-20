@@ -4,7 +4,6 @@ import io.github.z4kn4fein.semver.Version
 import io.github.z4kn4fein.semver.nextMajor
 import io.github.z4kn4fein.semver.nextMinor
 import io.github.z4kn4fein.semver.nextPatch
-import io.github.z4kn4fein.semver.nextPreRelease
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -59,7 +58,11 @@ abstract class SetApiVersionTask : DefaultTask() {
     abstract val versionFile: RegularFileProperty
 
     @TaskAction
-    fun setVersion() {
+    fun nextApiVersion(): String {
+        return calculateNextVersion()
+    }
+
+    fun calculateNextVersion(): String {
         validateVersionSuffix(versionSuffix)
 
         val oldApiFile = oldApi.get().asFile
@@ -69,13 +72,20 @@ abstract class SetApiVersionTask : DefaultTask() {
         logger.lifecycle("newApi is: ${newApiFile.absolutePath}")
 
         val oldVersion = project.version.toString()
-        // val parsedVersion = Version.parse(oldVersion)
+
         val newVersion = inferVersionByInspectingTheApisDiff(oldApiFile, newApiFile, versionSuffix.get(), acceptableDiffLevel.get())
 
-        updateVersion(newVersion)
+        if (!versionFile.get().asFile.exists()) {
+            versionFile.get().asFile.createNewFile()
+        }
+        versionFile.get().asFile.writeText("$newVersion")
+        return newVersion
+    }
 
-        logger.lifecycle("old version number is: $oldVersion")
-        logger.lifecycle("new version number is: $newVersion")
+    @TaskAction
+    fun setVersion() {
+        val newVersion = calculateNextVersion()
+        updateVersion(newVersion)
     }
 
     private fun inferVersionByInspectingTheApisDiff(oldApiFile: File, newApiFile: File, versionSuffix: String, acceptedDiffLevel: SemVerDif): String {
@@ -107,6 +117,7 @@ abstract class SetApiVersionTask : DefaultTask() {
 
         val oldApiVersion = Version.parse(oldApiVersionWithBuildInfoPartRemoved.toString())
         val newApiVersion = Version.parse(newApiVersionWithBuildInfoPartRemoved.toString())
+
         if (oldApiVersion.compareTo(newApiVersion) == 1) {
             throw RuntimeException(
                 "The old openapi document specifies a version that is higher than the new openapi" +
@@ -123,10 +134,14 @@ abstract class SetApiVersionTask : DefaultTask() {
             throw OpenApiDiffException(diffResult, acceptedDiffLevel)
         }
 
+        println("diffResult" + diffResult)
+        println("diffResult.isDifferent" + diffResult.isDifferent)
+        System.out.flush()
+
         var newVersion: Version
         when (diffResult) {
-            DiffResult.NO_CHANGES -> newVersion = newApiVersion.nextPreRelease(versionSuffix)
-            DiffResult.METADATA -> newVersion = newApiVersion.nextPatch()
+            DiffResult.NO_CHANGES -> newVersion = Version(newApiVersion.major, newApiVersion.minor, newApiVersion.patch) // newApiVersion.buildMetadata.nextPreRelease(versionSuffix)
+            DiffResult.METADATA -> newVersion = Version(newApiVersion.major, newApiVersion.minor, newApiVersion.patch).nextPatch()
             DiffResult.COMPATIBLE -> newVersion = newApiVersion.nextMinor()
             DiffResult.UNKNOWN -> throw UnsupportedOperationException(
                 "The openapi diff tool invoked by this plugin was " +
@@ -135,7 +150,10 @@ abstract class SetApiVersionTask : DefaultTask() {
             DiffResult.INCOMPATIBLE -> newVersion = newApiVersion.nextMajor()
         }
         logger.lifecycle("openapi-diff result = $diffResult")
-        return newVersion.toString() + versionSuffix
+        val newVersionAsStringWithSuffix = newVersion.toString() + versionSuffix
+        logger.lifecycle("old version number is: ${diff.oldSpecOpenApi.info.version}")
+        logger.lifecycle("new version number is: $newVersionAsStringWithSuffix")
+        return newVersionAsStringWithSuffix
     }
 
     private fun getVersionDiff(oldApiVersion: Version, newApiVersion: Version): SemVerDif {
@@ -163,7 +181,6 @@ abstract class SetApiVersionTask : DefaultTask() {
     }
 
     private fun updateVersion(version: String) {
-        versionFile.get().asFile.writeText("$version")
         if (hasProperty("version")) {
             setProperty("version", version)
         }
