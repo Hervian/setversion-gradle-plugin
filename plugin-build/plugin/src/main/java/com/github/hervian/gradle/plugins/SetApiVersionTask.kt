@@ -1,43 +1,171 @@
 package com.github.hervian.gradle.plugins
 
+import io.github.z4kn4fein.semver.Version
+import io.github.z4kn4fein.semver.nextMajor
+import io.github.z4kn4fein.semver.nextMinor
+import io.github.z4kn4fein.semver.nextPatch
+import io.github.z4kn4fein.semver.nextPreRelease
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
+import org.openapitools.openapidiff.core.OpenApiCompare
+import org.openapitools.openapidiff.core.model.DiffResult
+import java.io.File
 
 abstract class SetApiVersionTask : DefaultTask() {
 
-    init {
+   /* init {
         description = "Just a sample template task"
 
         // Don't forget to set the group here.
         // group = BasePlugin.BUILD_GROUP
-    }
+    }*/
+
+    @get:InputFile
+    @get:Option(
+        option = "oldApi",
+        description = "The old openapi document, i.e. typically the one that is in test or production",
+    )
+    abstract val oldApi: RegularFileProperty // = project.objects.fileProperty()
+
+    @get:InputFile
+    @get:Option(
+        option = "newApi",
+        description = "The new openapi document, i.e. typically the one that contain your changes",
+    )
+    abstract val newApi: RegularFileProperty // = project.objects.fileProperty()
 
     @get:Input
-    @get:Option(option = "message", description = "A message to be printed in the output file")
-    abstract val message: Property<String>
+    @get:Option(
+        option = "versionSuffix",
+        description = "A string that is suffixed to the inferred version number. Typically a timestamp or build number",
+    )
+    abstract val versionSuffix: Property<String> // by lazy { project.objects.property(String::class.java).convention("") }
 
     @get:Input
-    @get:Option(option = "tag", description = "A Tag to be used for debug and in the output file")
-    @get:Optional
-    abstract val tag: Property<String>
+    @get:Option(
+        option = "modus",
+        description = "Which level of API change should be allowed, " +
+            "i.e. result in a version upgrade, and which change should produce an OpenApiDiffException",
+    )
+    abstract val acceptableDiffLevel: Property<SemVerDif> // = project.objects.property(Modus::class.java)
 
     @get:OutputFile
-    abstract val outputFile: RegularFileProperty
+    abstract val versionFile: RegularFileProperty
 
     @TaskAction
-    fun sampleAction() {
-        val prettyTag = tag.orNull?.let { "[$it]" } ?: ""
+    fun setVersion() {
+        validateVersionSuffix(versionSuffix)
 
-        logger.lifecycle("$prettyTag message is: ${message.orNull}")
-        logger.lifecycle("$prettyTag tag is: ${tag.orNull}")
-        logger.lifecycle("$prettyTag outputFile is: ${outputFile.orNull}")
+        val oldApiFile = oldApi.get().asFile
+        val newApiFile = newApi.get().asFile
 
-        outputFile.get().asFile.writeText("$prettyTag ${message.get()}")
+        logger.lifecycle("oldApi is: ${oldApiFile.absolutePath}")
+        logger.lifecycle("newApi is: ${newApiFile.absolutePath}")
+
+        val oldVersion = project.version.toString()
+        // val parsedVersion = Version.parse(oldVersion)
+        val newVersion = inferVersionByInspectingTheApisDiff(oldApiFile, newApiFile, versionSuffix.get(), acceptableDiffLevel.get())
+
+        updateVersion(newVersion)
+
+        logger.lifecycle("old version number is: $oldVersion")
+        logger.lifecycle("new version number is: $newVersion")
+    }
+
+    private fun inferVersionByInspectingTheApisDiff(oldApiFile: File, newApiFile: File, versionSuffix: String, acceptedDiffLevel: SemVerDif): String {
+        val diff = OpenApiCompare.fromFiles(oldApiFile, newApiFile)
+
+        var indexOfFirstcharFromSemverBuildPart = diff.oldSpecOpenApi.info.version.indexOfFirst {
+            !it.isDigit() && it != '.'
+        }
+        val oldApiVersionWithBuildInfoPartRemoved = if (indexOfFirstcharFromSemverBuildPart > 0) {
+            diff.oldSpecOpenApi.info.version.subSequence(
+                0,
+                indexOfFirstcharFromSemverBuildPart,
+            )
+        } else {
+            diff.oldSpecOpenApi.info.version
+        }
+
+        indexOfFirstcharFromSemverBuildPart = diff.oldSpecOpenApi.info.version.indexOfFirst {
+            !it.isDigit() && it != '.'
+        }
+        val newApiVersionWithBuildInfoPartRemoved = if (indexOfFirstcharFromSemverBuildPart > 0) {
+            diff.newSpecOpenApi.info.version.subSequence(
+                0,
+                indexOfFirstcharFromSemverBuildPart,
+            )
+        } else {
+            diff.newSpecOpenApi.info.version
+        }
+
+        val oldApiVersion = Version.parse(oldApiVersionWithBuildInfoPartRemoved.toString())
+        val newApiVersion = Version.parse(newApiVersionWithBuildInfoPartRemoved.toString())
+        if (oldApiVersion.compareTo(newApiVersion) == 1) {
+            throw RuntimeException(
+                "The old openapi document specifies a version that is higher than the new openapi" +
+                    "specification's version. This is not supported.",
+            )
+        }
+        val versionDiff: SemVerDif = getVersionDiff(oldApiVersion, newApiVersion)
+
+        val diffResult = diff.isChanged
+        if (diffResult.weight > acceptedDiffLevel.weight && versionDiff.weight < diffResult.weight) {
+            // Example: user has configured that unflagged breaking changes should cause an exception
+            // That is, the plugin is configured with fx ChangeLevel.MINOR and the openapi doc's version
+            // has not had it's major upgraded.
+            throw OpenApiDiffException(diffResult, acceptedDiffLevel)
+        }
+
+        var newVersion: Version
+        when (diffResult) {
+            DiffResult.NO_CHANGES -> newVersion = newApiVersion.nextPreRelease(versionSuffix)
+            DiffResult.METADATA -> newVersion = newApiVersion.nextPatch()
+            DiffResult.COMPATIBLE -> newVersion = newApiVersion.nextMinor()
+            DiffResult.UNKNOWN -> throw UnsupportedOperationException(
+                "The openapi diff tool invoked by this plugin was " +
+                    "unable to detect the type of diff",
+            )
+            DiffResult.INCOMPATIBLE -> newVersion = newApiVersion.nextMajor()
+        }
+        logger.lifecycle("openapi-diff result = $diffResult")
+        return newVersion.toString() + versionSuffix
+    }
+
+    private fun getVersionDiff(oldApiVersion: Version, newApiVersion: Version): SemVerDif {
+        if (newApiVersion.major > oldApiVersion.major) {
+            return SemVerDif.MAJOR
+        }
+        if (newApiVersion.minor > oldApiVersion.minor) {
+            return SemVerDif.MINOR
+        }
+        if (newApiVersion.patch > oldApiVersion.patch) {
+            return SemVerDif.PATCH
+        }
+        return SemVerDif.NONE
+    }
+
+    /*fun getChangeLevel(changedOperation: ChangedOperation): ChangeLevel {
+        return ChangeLevel.NONE
+    }*/
+
+    /**
+     * https://semver.org/
+     */
+    private fun validateVersionSuffix(versionSuffix: Property<String>) {
+        assert(versionSuffix.get().startsWith("-") || versionSuffix.get().startsWith("+"))
+    }
+
+    private fun updateVersion(version: String) {
+        versionFile.get().asFile.writeText("$version")
+        if (hasProperty("version")) {
+            setProperty("version", version)
+        }
     }
 }

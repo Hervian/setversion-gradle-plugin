@@ -6,10 +6,15 @@ plugins {
     alias(libs.plugins.pluginPublish)
 }
 
+repositories{
+    mavenCentral()
+}
+
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(gradleApi())
-
+    implementation(libs.openapidiff)
+    implementation(libs.semver)
     testImplementation(libs.junit)
 }
 

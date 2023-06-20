@@ -1,4 +1,4 @@
-import com.github.hervian.gradle.plugins.Modus
+import com.github.hervian.gradle.plugins.SemVerDif
 
 plugins {
     java
@@ -8,7 +8,7 @@ plugins {
 setApiVersionExtension {
     oldApi.set(file("${project.projectDir}/src/main/resources/petstore.json"))
     newApi.set(file("${project.projectDir}/src/main/resources/petstoreWithMinorChange.json"))
-    modus.set(Modus.ALLOW_MINOR)
+    acceptableDiffLevel.set(SemVerDif.MINOR)
     /*versionSuffix.set(org.gradle.internal.impldep.org.joda.time.format.ISODateTimeFormat.basicDateTimeNoMillis().print(
         Instant.now()))*/
 }

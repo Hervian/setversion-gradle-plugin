@@ -13,9 +13,11 @@ abstract class SetVersionPlugin : Plugin<Project> {
 
         // Add a task that uses configuration from the extension object
         project.tasks.register(TASK_NAME, SetApiVersionTask::class.java) {
-            it.tag.set(extension.tag)
-            it.message.set(extension.message)
-            it.outputFile.set(extension.outputFile)
+            it.oldApi.set(extension.oldApi)
+            it.newApi.set(extension.newApi)
+            it.versionSuffix.set(extension.versionSuffix)
+            it.acceptableDiffLevel.set(extension.acceptableDiffLevel)
+            it.versionFile.set(extension.versionFile)
         }
     }
 }

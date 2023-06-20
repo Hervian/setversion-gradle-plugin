@@ -1,30 +1,21 @@
 # kotlin-gradle-plugin-template 🐘
 
-[![Use this template](https://img.shields.io/badge/-Use%20this%20template-brightgreen)](https://github.com/cortinico/kotlin-gradle-plugin-template/generate) [![Pre Merge Checks](https://github.com/cortinico/kotlin-gradle-plugin-template/workflows/Pre%20Merge%20Checks/badge.svg)](https://github.com/cortinico/kotlin-gradle-plugin-template/actions?query=workflow%3A%22Pre+Merge+Checks%22)  [![License](https://img.shields.io/github/license/cortinico/kotlin-android-template.svg)](LICENSE) ![Language](https://img.shields.io/github/languages/top/cortinico/kotlin-android-template?color=blue&logo=kotlin)
-
-A simple Github template that lets you create a **Gradle Plugin** 🐘 project using **100% Kotlin** and be up and running in a **few seconds**.
-
-This template is focused on delivering a project with **static analysis** and **continuous integration** already in place.
+A Gradle plugin to upgrade the gradle version based based on diffs between your projects current openapi.json spec and
+whatever is in test/QA/prod etc. That is: The plugin takes the old openapi.json and the new openapi.json as input.
+Intended usage is to add a call the setApiVersion task in your pipeline such as to get automatic versioning for
+your openapi documented REST app.
 
 ## How to use 👣
 
-Just click on [![Use this template](https://img.shields.io/badge/-Use%20this%20template-brightgreen)](https://github.com/cortinico/kotlin-gradle-plugin-template/generate) button to create a new repo starting from this template.
+`gradlew setApiVersion`
+Be aware that the task needs 2 files: the "old" api and the new api.
 
-Once created don't forget to update the:
-- [gradle.properties](plugin-build/gradle.properties)
-- Plugin Usages (search for [com.ncorti.kotlin.gradle.template](https://github.com/cortinico/kotlin-gradle-plugin-template/search?q=com.ncorti.kotlin.gradle.template&unscoped_q=com.ncorti.kotlin.gradle.template) in the repo and replace it with your ID).
+If you are using springdoc that works by runtime scanning you must add a plugin like the openapi-gradle-plugin
+which build time starts up a server and then downloads the openapi doc such as to make it available for downstream
+tooling like present plugin.
 
 ## Features 🎨
 
-- **100% Kotlin-only template**.
-- Plugin build setup with **composite build**.
-- 100% Gradle Kotlin DSL setup.
-- Dependency versions managed via Gradle Versions Catalog (`libs.versions.toml`).
-- CI Setup with GitHub Actions.
-- Kotlin Static Analysis via `ktlint` and `detekt`.
-- Publishing-ready to Gradle Portal.
-- Issues Template (bug report + feature request)
-- Pull Request Template.
 
 ## Composite Build 📦
 
